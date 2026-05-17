@@ -1,0 +1,14 @@
+cat > .gitignore << 'EOF'
+.DS_Store
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/*.csv
+outputs/*.csv
+logs/*.log
+*.db
+*.sqlite
+.streamlit/ß
