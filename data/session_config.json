@@ -1,0 +1,9 @@
+{
+  "strategy": "regime_mean_reversion",
+  "symbols": [
+    "NBIS",
+    "GOOGL",
+    "NVDA"
+  ],
+  "updated_at": "2026-05-17T14:53:46"
+}
