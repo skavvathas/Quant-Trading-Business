@@ -119,6 +119,20 @@ Based on *"A Profitable Day Trading Strategy For The U.S. Equity Market"*
 Trades the first 5-minute breakout of the day on the top 20 Stocks in Play,
 filtered by Relative Volume. Stop loss at 10% ATR, profit target at EOD.
 
+## Key Terms
+
+| Term | Definition |
+|---|---|
+| **Opening Range (OR)** | The high and low formed by the very first 5-minute candle after 9:30 AM ET. |
+| **ORB Signal** | A break above the OR high → LONG; a break below the OR low → SHORT. |
+| **ATR** (Average True Range) | 14-day average of each day's full price range in dollars — measures a stock's typical daily volatility. |
+| **RelVol** (Relative Volume) | Today's opening candle volume ÷ 14-day average opening candle volume; values > 1 mean unusual activity. |
+| **Stocks in Play** | The top 20 symbols ranked by RelVol each morning — high activity means a catalyst is present and the move is more likely to follow through. |
+| **R** (Risk Unit) | The dollar risk per share on entry (entry price − stop price); all P&L is expressed as multiples of R so trades are comparable regardless of price. |
+| **Stop Loss** | A resting sell/buy order placed at entry ± 10% × ATR; it exits the trade automatically if price reverses. |
+| **EOD Close** | All open positions are force-closed at 3:50 PM ET to avoid overnight gap risk. |
+| **RelVol Filter** | Only symbols with RelVol ≥ 1.0 (at least 100% of their normal opening volume) are traded. |
+
 ## Architecture
 
 ```
