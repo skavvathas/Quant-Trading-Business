@@ -11,26 +11,29 @@ pip install -r requirements.txt
 # Copy env template and fill in Alpaca paper API keys
 cp .env.example .env
 
-# Run backtest (no API key required — uses yfinance)
-python backtest.py
+# Launch the Strategy Hub (landing page → navigate to ORB dashboard)
+streamlit run app.py
 
-# Start live paper trading loop
-python main.py
+# Start live ORB paper trading loop (or use the Start Trading button in the dashboard)
+python orb_main.py
 
-# Launch Streamlit dashboard (separate terminal)
-streamlit run dashboard.py
+# Run ORB backtest
+python strategies/orb/backtest.py
 ```
 
 No test suite or linter is configured. The project uses Python 3.14+ (CPython); use `.venv/` for the active virtualenv.
 
 ## Architecture
 
-The system is a modular intraday mean reversion trading pipeline with three runnable entry points:
+The system is an ORB (Opening Range Breakout) intraday trading pipeline with these entry points:
 
 ```
-main.py         → live 5-min trading loop
-backtest.py     → historical simulation (yfinance, vectorized, no Alpaca key needed)
-dashboard.py    → Streamlit UI for config + real-time monitoring
+app.py              → Streamlit landing page (strategy hub)
+pages/
+  ORB_Dashboard.py  → ORB live dashboard (delegates to orb_dashboard.py)
+orb_dashboard.py    → ORB dashboard implementation (also runnable standalone)
+orb_main.py         → ORB live trading loop (Alpaca paper/live)
+strategies/orb/     → Strategy logic, scanner, executor, backtest
 ```
 
 ### Data flow (live loop)
