@@ -59,6 +59,8 @@ class OpenPosition:
     qty: int
     stop_loss_price: float
     stop_loss_order_id: Optional[str]
+    take_profit_price: float
+    take_profit_order_id: Optional[str]
     entry_time: datetime
 
 
@@ -181,6 +183,12 @@ class ORBExecutor:
                     direction=pending.signal.direction,
                     stop_price=pending.signal.stop_loss,
                 )
+                tp_order_id = self._submit_take_profit(
+                    ticker=pending.signal.ticker,
+                    qty=pending.qty,
+                    direction=pending.signal.direction,
+                    limit_price=pending.signal.take_profit,
+                )
                 self.open_positions[pending.signal.ticker] = OpenPosition(
                     ticker=pending.signal.ticker,
                     direction=pending.signal.direction,
@@ -188,6 +196,8 @@ class ORBExecutor:
                     qty=pending.qty,
                     stop_loss_price=pending.signal.stop_loss,
                     stop_loss_order_id=sl_order_id,
+                    take_profit_price=pending.signal.take_profit,
+                    take_profit_order_id=tp_order_id,
                     entry_time=datetime.now(tz=ET),
                 )
                 self._log_order(
@@ -240,6 +250,68 @@ class ORBExecutor:
             logger.error("Failed to submit stop loss for %s: %s", ticker, e)
             return None
 
+    def _submit_take_profit(
+        self,
+        ticker: str,
+        qty: int,
+        direction: Direction,
+        limit_price: float,
+    ) -> Optional[str]:
+        """Submit a limit order at the take-profit level."""
+        exit_side = "sell" if direction == Direction.LONG else "buy"
+
+        if not config.ALPACA_API_KEY:
+            order_id = f"SIM-TP-{ticker}-{datetime.utcnow().strftime('%H%M%S%f')}"
+            logger.info("SIM TAKE-PROFIT %s %d %s @ %.4f → %s", exit_side.upper(), qty, ticker, limit_price, order_id)
+            self._log_order(ticker, "take_profit", exit_side, qty, limit_price, order_id, "submitted")
+            return order_id
+
+        try:
+            from alpaca.trading.requests import LimitOrderRequest
+            from alpaca.trading.enums import OrderSide, TimeInForce
+
+            req = LimitOrderRequest(
+                symbol=ticker,
+                qty=qty,
+                side=OrderSide.SELL if exit_side == "sell" else OrderSide.BUY,
+                time_in_force=TimeInForce.DAY,
+                limit_price=round(limit_price, 2),
+            )
+            order = self._client().submit_order(req)
+            logger.info("TAKE PROFIT submitted: %s %d %s @ %.4f (id=%s)", exit_side.upper(), qty, ticker, limit_price, order.id)
+            self._log_order(ticker, "take_profit", exit_side, qty, limit_price, str(order.id), "submitted")
+            return str(order.id)
+        except Exception as e:
+            logger.error("Failed to submit take profit for %s: %s", ticker, e)
+            return None
+
+    def sync_take_profit_hits(self) -> None:
+        """Check if any take-profit limit orders have been filled."""
+        for ticker, pos in list(self.open_positions.items()):
+            if not pos.take_profit_order_id:
+                continue
+            status = self._get_order_status(pos.take_profit_order_id)
+            if status["status"] == "filled":
+                fill_price = status["filled_avg_price"] or pos.take_profit_price
+                if pos.stop_loss_order_id:
+                    self._cancel_order(pos.stop_loss_order_id)
+                pnl_r = self._calc_pnl_r(pos, exit_price=fill_price)
+                hold_minutes = (datetime.now(tz=ET) - pos.entry_time).total_seconds() / 60
+                self._log_trade(
+                    ticker=ticker,
+                    direction=pos.direction.value,
+                    entry_price=pos.entry_price,
+                    exit_price=fill_price,
+                    stop_loss=pos.stop_loss_price,
+                    qty=pos.qty,
+                    pnl_r=pnl_r,
+                    hold_minutes=round(hold_minutes, 1),
+                    exit_reason="take_profit",
+                    exit_order_id=pos.take_profit_order_id,
+                )
+                logger.info("TAKE PROFIT HIT: %s @ %.4f (pnl_r=%.2fR)", ticker, fill_price, pnl_r)
+                del self.open_positions[ticker]
+
     # ── Step 3a: EOD — cancel all unfilled stop-entry orders ──────────────────
 
     def cancel_pending_entries(self) -> None:
@@ -268,6 +340,8 @@ class ORBExecutor:
         for ticker, pos in list(self.open_positions.items()):
             if pos.stop_loss_order_id:
                 self._cancel_order(pos.stop_loss_order_id)
+            if pos.take_profit_order_id:
+                self._cancel_order(pos.take_profit_order_id)
 
             exit_side = "sell" if pos.direction == Direction.LONG else "buy"
             order_id = self._submit_market_order(ticker, pos.qty, exit_side)
@@ -305,6 +379,8 @@ class ORBExecutor:
             status = self._get_order_status(pos.stop_loss_order_id)
             if status["status"] == "filled":
                 fill_price = status["filled_avg_price"] or pos.stop_loss_price
+                if pos.take_profit_order_id:
+                    self._cancel_order(pos.take_profit_order_id)
                 pnl_r = self._calc_pnl_r(pos, exit_price=fill_price)
                 hold_minutes = (datetime.now(tz=ET) - pos.entry_time).total_seconds() / 60
                 self._log_trade(
@@ -319,7 +395,7 @@ class ORBExecutor:
                     exit_reason="stop_loss",
                     exit_order_id=pos.stop_loss_order_id,
                 )
-                logger.info("STOP LOSS HIT: %s @ %.4f (pnl_r=%.2f)", ticker, fill_price, pnl_r)
+                logger.info("STOP LOSS HIT: %s @ %.4f (pnl_r=%.2fR)", ticker, fill_price, pnl_r)
                 del self.open_positions[ticker]
 
     # ── Alpaca helpers ─────────────────────────────────────────────────────────

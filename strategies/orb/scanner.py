@@ -45,6 +45,7 @@ def fetch_opening_candles(symbols: list[str]) -> dict[str, dict]:
                 timeframe=TimeFrame(5, TimeFrameUnit.Minute),
                 start=start,
                 end=now,
+                feed="iex",
             )
             df = client.get_stock_bars(req).df
             if df.empty:
@@ -97,6 +98,109 @@ def build_setups(
             atr_14d=entry.atr_14d,
         ))
     return setups
+
+
+# ── 30-min opening candles ────────────────────────────────────────────────────
+
+def fetch_opening_candles_30min(symbols: list[str]) -> dict[str, dict]:
+    """
+    Batch-fetch the 9:30 AM ET 30-min bar (9:30–10:00) for all symbols.
+    Returns {ticker: {open, high, low, close, volume}}.
+    """
+    from alpaca.data.requests import StockBarsRequest
+    from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+
+    client = _data_client()
+    now   = datetime.now(tz=ET)
+    start = now.replace(hour=9, minute=29, second=0, microsecond=0)
+
+    candles: dict[str, dict] = {}
+
+    for i in range(0, len(symbols), orb_config.CHUNK_SIZE):
+        chunk = symbols[i : i + orb_config.CHUNK_SIZE]
+        try:
+            req = StockBarsRequest(
+                symbol_or_symbols=chunk,
+                timeframe=TimeFrame(30, TimeFrameUnit.Minute),
+                start=start,
+                end=now,
+                feed="iex",
+            )
+            df = client.get_stock_bars(req).df
+            if df.empty:
+                continue
+
+            flat = df.reset_index()
+            flat["timestamp"] = pd.to_datetime(flat["timestamp"], utc=True).dt.tz_convert(ET)
+            opening = flat[flat["timestamp"].dt.time == dtime(9, 30)]
+
+            for sym in chunk:
+                rows = opening[opening["symbol"] == sym]
+                if not rows.empty:
+                    row = rows.iloc[0]
+                    candles[sym] = {
+                        "open":   float(row["open"]),
+                        "high":   float(row["high"]),
+                        "low":    float(row["low"]),
+                        "close":  float(row["close"]),
+                        "volume": float(row["volume"]),
+                    }
+        except Exception as e:
+            logger.warning("30-min candles batch %d failed: %s", i // orb_config.CHUNK_SIZE, e)
+
+    logger.info("30-min opening candles: %d/%d symbols", len(candles), len(symbols))
+    return candles
+
+
+def run_scan_30min(
+    watchlist: list[WatchlistEntry] | None = None,
+    top_n: int = orb_config.TOP_N,
+) -> list[ORBSignal]:
+    """
+    Manual 30-min ORB scan. Call after 10:00 AM ET when the first 30-min candle closes.
+    Uses avg_14d_volume / 13 as the expected 30-min opening volume baseline
+    (a trading session has 13 × 30-min bars).
+    """
+    if watchlist is None:
+        watchlist = load_watchlist()
+    if not watchlist:
+        logger.warning("Watchlist is empty — run universe.build_watchlist() pre-market")
+        return []
+
+    symbols = [e.ticker for e in watchlist]
+    opening_candles = fetch_opening_candles_30min(symbols)
+
+    setups = []
+    for entry in watchlist:
+        candle = opening_candles.get(entry.ticker)
+        if not candle:
+            continue
+        avg_30min_orvolume = entry.avg_14d_volume / 13
+        setups.append(ORBSetup(
+            ticker=entry.ticker,
+            open_price=candle["open"],
+            first_candle_open=candle["open"],
+            first_candle_close=candle["close"],
+            first_candle_high=candle["high"],
+            first_candle_low=candle["low"],
+            first_candle_volume=candle["volume"],
+            avg_14d_volume=entry.avg_14d_volume,
+            avg_14d_orvolume=avg_30min_orvolume,
+            atr_14d=entry.atr_14d,
+        ))
+
+    signals: list[ORBSignal] = []
+    for setup in setups:
+        sig = generate_signal(setup, min_relvol=orb_config.MIN_RELVOL)
+        if sig:
+            signals.append(sig)
+
+    top = select_top_n(signals, n=top_n)
+    logger.info(
+        "ORB 30-min scan: %d setups → %d signals → top %d by RelVol",
+        len(setups), len(signals), len(top),
+    )
+    return top
 
 
 # ── Full morning pipeline ──────────────────────────────────────────────────────

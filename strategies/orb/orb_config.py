@@ -15,8 +15,18 @@ MIN_ATR          = 0.50        # 14-day ATR in dollars
 MIN_RELVOL       = 1.0         # 100% — today's OR volume >= 14-day avg OR volume
 TOP_N            = 20          # keep top N by RelVol
 
-# ── Entry / exit ───────────────────────────────────────────────────────────────
-ATR_STOP_PCT     = 0.10        # stop loss = 10% of daily ATR from entry price
+# ── Dynamic stop-loss & take-profit tiers (keyed by ATR magnitude) ────────────
+# Tiers checked top-to-bottom; first match wins.
+# stop_value: fixed dollar amount when stop_is_fixed=True, else ATR multiplier.
+# tp_r: take-profit distance as a multiple of the stop distance (R-multiple).
+ATR_TIERS: list[dict] = [
+    {"atr_min": 10.0, "stop_value": 0.75, "stop_is_fixed": True,  "tp_r": 4.0},  # e.g. TSLA, NVDA
+    {"atr_min":  5.0, "stop_value": 0.50, "stop_is_fixed": False, "tp_r": 4.0},  # e.g. AAPL, MSFT
+    {"atr_min":  2.0, "stop_value": 0.75, "stop_is_fixed": False, "tp_r": 3.5},  # mid-range
+    {"atr_min":  0.0, "stop_value": 1.00, "stop_is_fixed": False, "tp_r": 3.0},  # e.g. IMVT (ATR 1.37)
+]
+
+ATR_STOP_PCT     = 0.10        # legacy — kept for backtest compatibility only
 
 # ── Position sizing ────────────────────────────────────────────────────────────
 RISK_PER_TRADE   = 0.01        # risk 1% of initial capital per trade if stop is hit

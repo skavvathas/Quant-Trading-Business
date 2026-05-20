@@ -30,7 +30,7 @@ import pytz
 
 import config
 from strategies.orb import orb_config
-from strategies.orb.strategy import Direction, compute_stop_loss
+from strategies.orb.strategy import Direction, compute_stop_loss, compute_take_profit
 from strategies.orb.data_fetcher import bars_path
 
 logger = logging.getLogger(__name__)
@@ -195,6 +195,8 @@ def _simulate_trade(
     if bars.empty:
         return None
 
+    take_profit = compute_take_profit(entry_price, stop_loss, atr, direction)
+
     # Find entry trigger
     entry_idx = None
     for i, row in bars.iterrows():
@@ -213,14 +215,25 @@ def _simulate_trade(
     exit_time   = bars.iloc[-1]["timestamp"]
 
     for _, row in post_entry.iterrows():
-        if direction == Direction.LONG  and row["low"]  <= stop_loss:
+        sl_hit = (direction == Direction.LONG  and row["low"]  <= stop_loss) or \
+                 (direction == Direction.SHORT and row["high"] >= stop_loss)
+        tp_hit = (direction == Direction.LONG  and row["high"] >= take_profit) or \
+                 (direction == Direction.SHORT and row["low"]  <= take_profit)
+
+        if sl_hit and tp_hit:
+            # Both on same bar — assume stop hit first (conservative)
             exit_price  = stop_loss
             exit_reason = "stop_loss"
             exit_time   = row["timestamp"]
             break
-        if direction == Direction.SHORT and row["high"] >= stop_loss:
+        if sl_hit:
             exit_price  = stop_loss
             exit_reason = "stop_loss"
+            exit_time   = row["timestamp"]
+            break
+        if tp_hit:
+            exit_price  = take_profit
+            exit_reason = "take_profit"
             exit_time   = row["timestamp"]
             break
 
@@ -247,6 +260,7 @@ def _simulate_trade(
         "entry_price": round(entry_price,  4),
         "exit_price":  round(exit_price,   4),
         "stop_loss":   round(stop_loss,    4),
+        "take_profit": round(take_profit,  4),
         "entry_time":  entry_time,
         "exit_time":   exit_time,
         "exit_reason": exit_reason,
@@ -407,8 +421,9 @@ def _compute_metrics(trades_df: pd.DataFrame, equity: pd.Series, initial_capital
 
     win_rate  = float((trades_df["pnl_dollars"] > 0).mean()) if not trades_df.empty else 0.0
     avg_pnl_r = float(trades_df["pnl_r"].mean())             if not trades_df.empty else 0.0
-    sl_count  = int((trades_df["exit_reason"] == "stop_loss").sum()) if not trades_df.empty else 0
-    eod_count = int((trades_df["exit_reason"] == "eod").sum())       if not trades_df.empty else 0
+    sl_count  = int((trades_df["exit_reason"] == "stop_loss").sum())  if not trades_df.empty else 0
+    tp_count  = int((trades_df["exit_reason"] == "take_profit").sum()) if not trades_df.empty else 0
+    eod_count = int((trades_df["exit_reason"] == "eod").sum())        if not trades_df.empty else 0
 
     return {
         "total_return_%":    round(total_return * 100, 2),
@@ -420,6 +435,7 @@ def _compute_metrics(trades_df: pd.DataFrame, equity: pd.Series, initial_capital
         "avg_pnl_r":         round(avg_pnl_r,            4),
         "n_trades":          len(trades_df),
         "stop_loss_exits":   sl_count,
+        "take_profit_exits": tp_count,
         "eod_exits":         eod_count,
         "final_capital_$":   round(equity.iloc[-1],      2),
         "initial_capital_$": initial_capital,
@@ -437,3 +453,33 @@ def _save_results(trades_df: pd.DataFrame, equity: pd.Series, metrics: dict) -> 
     for k, v in metrics.items():
         logger.info("  %-25s %s", k, v)
     logger.info("  Results saved to %s", out)
+
+
+# ── CLI entry point ───────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    import sys
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s  %(levelname)-8s  %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    from strategies.orb.data_fetcher import load_universe
+
+    start = sys.argv[1] if len(sys.argv) > 1 else "2024-01-01"
+    end   = sys.argv[2] if len(sys.argv) > 2 else "2025-12-31"
+
+    logger.info("ORB Backtest  |  %s → %s  |  ATR-tier stops + %s R-multiples",
+                start, end, [t["tp_r"] for t in orb_config.ATR_TIERS])
+
+    symbols = load_universe()
+    trades_df, equity, metrics = run_backtest(symbols, start, end)
+
+    print("\n── Results ─────────────────────────────────────")
+    for k, v in metrics.items():
+        print(f"  {k:<25} {v}")
+    print(f"\n  Stop-loss exits : {metrics.get('stop_loss_exits', 0)}")
+    print(f"  Take-profit exits: {metrics.get('take_profit_exits', 0)}")
+    print(f"  EOD exits        : {metrics.get('eod_exits', 0)}")

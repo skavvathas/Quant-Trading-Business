@@ -1,0 +1,18 @@
+{
+  "updated_at": "2026-05-20T11:02:43.919365-04:00",
+  "signals": [
+    {
+      "symbol": "IMVT",
+      "direction": "long",
+      "entry_price": 33.34,
+      "stop_loss": 31.9705,
+      "relvol": 1.52,
+      "atr": 1.3695,
+      "shares": 182,
+      "take_profit": 37.4485,
+      "opening_range_high": 33.34,
+      "opening_range_low": 30.225,
+      "status": "not_triggered"
+    }
+  ]
+}

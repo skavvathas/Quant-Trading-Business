@@ -92,6 +92,7 @@ def fetch_daily_bars_batch(symbols: list[str]) -> pd.DataFrame:
                 timeframe=TimeFrame.Day,
                 start=start,
                 end=end,
+                feed="iex",
             )
             df = client.get_stock_bars(req).df
             if not df.empty:
@@ -184,6 +185,7 @@ def fetch_avg_orvolume_batch(symbols: list[str]) -> dict[str, float]:
                 timeframe=TimeFrame(5, TimeFrameUnit.Minute),
                 start=start,
                 end=end,
+                feed="iex",
             )
             df = client.get_stock_bars(req).df
             if df.empty:

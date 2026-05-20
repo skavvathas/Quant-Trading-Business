@@ -10,6 +10,8 @@ from typing import Optional
 
 import pandas as pd
 
+from strategies.orb import orb_config
+
 
 class Direction(Enum):
     LONG = "long"
@@ -22,7 +24,8 @@ class ORBSignal:
     ticker: str
     direction: Direction
     entry_price: float       # stop order trigger level (5-min high or low)
-    stop_loss: float         # 10% ATR from entry
+    stop_loss: float         # dynamic ATR-tier stop
+    take_profit: float       # R-multiple limit order target
     atr: float
     relative_volume: float
     opening_range_high: float
@@ -106,17 +109,44 @@ def compute_entry_price(setup: ORBSetup, direction: Direction) -> Optional[float
     return None
 
 
-def compute_stop_loss(entry_price: float, atr: float, direction: Direction, atr_pct: float = 0.10) -> float:
+def _stop_distance(atr: float) -> float:
+    """Dynamic stop distance from ATR tiers defined in orb_config.ATR_TIERS."""
+    for tier in orb_config.ATR_TIERS:
+        if atr >= tier["atr_min"]:
+            return tier["stop_value"] if tier["stop_is_fixed"] else tier["stop_value"] * atr
+    return atr  # fallback: 1× ATR
+
+
+def _tp_r(atr: float) -> float:
+    """R-multiple for take-profit from ATR tiers."""
+    for tier in orb_config.ATR_TIERS:
+        if atr >= tier["atr_min"]:
+            return tier["tp_r"]
+    return 2.0
+
+
+def compute_stop_loss(entry_price: float, atr: float, direction: Direction,
+                      atr_pct: float = None) -> float:
     """
-    Stop loss = 10% of 14-day daily ATR from the entry price.
-    LONG  → entry - (atr_pct * atr)
-    SHORT → entry + (atr_pct * atr)
+    Dynamic stop loss based on ATR tier (see orb_config.ATR_TIERS).
+    Pass atr_pct explicitly only for legacy/backtest use.
     """
-    offset = atr_pct * atr
+    offset = (atr_pct * atr) if atr_pct is not None else _stop_distance(atr)
     if direction == Direction.LONG:
         return entry_price - offset
     else:
         return entry_price + offset
+
+
+def compute_take_profit(entry_price: float, stop_loss: float,
+                        atr: float, direction: Direction) -> float:
+    """Take-profit = entry ± (stop_distance × R-multiple)."""
+    risk = abs(entry_price - stop_loss)
+    offset = risk * _tp_r(atr)
+    if direction == Direction.LONG:
+        return entry_price + offset
+    else:
+        return entry_price - offset
 
 
 # --- Position sizing ---
@@ -162,13 +192,15 @@ def generate_signal(setup: ORBSetup, min_relvol: float = 1.0) -> Optional[ORBSig
         return None
 
     entry_price = compute_entry_price(setup, direction)
-    stop_loss = compute_stop_loss(entry_price, setup.atr_14d, direction)
+    stop_loss   = compute_stop_loss(entry_price, setup.atr_14d, direction)
+    take_profit = compute_take_profit(entry_price, stop_loss, setup.atr_14d, direction)
 
     return ORBSignal(
         ticker=setup.ticker,
         direction=direction,
         entry_price=entry_price,
         stop_loss=stop_loss,
+        take_profit=take_profit,
         atr=setup.atr_14d,
         relative_volume=relative_volume,
         opening_range_high=setup.first_candle_high,

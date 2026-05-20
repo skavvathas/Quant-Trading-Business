@@ -100,9 +100,16 @@ orb_status_html = (
 orb_class = "card live" if _orb_live else "card"
 
 
-# ── Strategy cards ─────────────────────────────────────────────────────────────
+# ── Quantitative Strategies ────────────────────────────────────────────────────
 
-c1, c2, c3 = st.columns(3, gap="large")
+st.markdown(
+    '<p style="font-size:0.70rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;'
+    'color:#6b7280;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid #1f2937;">'
+    'Quantitative Strategies</p>',
+    unsafe_allow_html=True,
+)
+
+c1, _spacer = st.columns([1, 2], gap="large")
 
 with c1:
     st.markdown(f"""
@@ -115,22 +122,30 @@ with c1:
     """, unsafe_allow_html=True)
     st.page_link("pages/ORB_Dashboard.py", label="Open dashboard →", use_container_width=True)
 
-with c2:
-    st.markdown("""
-    <div class="card dim">
-        <div class="card-abbr" style="color:#374151;">MR</div>
-        <div class="card-name">Mean Reversion</div>
-        <div class="card-desc">Z-score entry gated by VIX regime and per-symbol realized vol</div>
-        <span class="card-status grey">Coming soon</span>
-    </div>
-    """, unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
-with c3:
+
+# ── Options Strategies ─────────────────────────────────────────────────────────
+
+st.markdown(
+    '<p style="font-size:0.70rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;'
+    'color:#6b7280;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid #1f2937;">'
+    'Options Strategies</p>',
+    unsafe_allow_html=True,
+)
+
+opt_c1, _opt_spacer = st.columns([1, 2], gap="large")
+
+with opt_c1:
     st.markdown("""
-    <div class="card dim">
-        <div class="card-abbr" style="color:#374151;">MOM</div>
-        <div class="card-name">Intraday Momentum</div>
-        <div class="card-desc">Trend-following with trailing stop anchored to VWAP</div>
-        <span class="card-status grey">Coming soon</span>
+    <div class="card">
+        <div class="card-abbr">WHEEL</div>
+        <div class="card-name">Wheel Strategy</div>
+        <div class="card-desc">
+            Sell cash-secured puts → take assignment → sell covered calls.
+            Generates premium income on stocks you're willing to own.
+        </div>
+        <span class="card-status grey">● Strategy overview available</span>
     </div>
     """, unsafe_allow_html=True)
+    st.page_link("pages/Wheel_Strategy.py", label="View strategy →", use_container_width=True)

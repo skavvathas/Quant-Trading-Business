@@ -28,7 +28,8 @@ from strategies.orb.executor import ORBExecutor
 
 logger = logging.getLogger(__name__)
 ET = pytz.timezone("America/New_York")
-STATE_FILE = config.DATA_DIR / "orb_state.json"
+STATE_FILE    = config.DATA_DIR / "orb_state.json"
+QUEUE_30MIN   = config.DATA_DIR / "orb_30min_queue.json"
 
 
 def _alpaca_account() -> dict:
@@ -73,6 +74,7 @@ def _write_state(executor: ORBExecutor, signals: list, account: dict) -> None:
                 "direction":   s.direction.value,
                 "entry_price": round(s.entry_price, 4),
                 "stop_loss":   round(s.stop_loss,   4),
+                "take_profit": round(s.take_profit,  4),
                 "relvol":      round(s.relative_volume, 2),
                 "atr":         round(s.atr, 4),
                 "shares":      compute_shares(s.entry_price, s.stop_loss, equity),
@@ -108,24 +110,43 @@ def run() -> None:
     )
     logger.info("ORB live loop starting  (paper=%s)", config.PAPER_TRADING)
 
-    try:
-        watchlist = load_watchlist()
+    watchlist = load_watchlist()
+    if watchlist:
         logger.info("Watchlist loaded: %d symbols", len(watchlist))
-    except FileNotFoundError:
+    else:
         logger.info("No watchlist on disk — building now (takes a few minutes)…")
         watchlist = build_watchlist()
 
     account   = _alpaca_account()
     executor  = ORBExecutor(capital=account.get("equity") or 25_000.0)
     signals: list = []
-    scan_done = False
-    eod_done  = False
-    today     = None
+    scan_done      = False
+    eod_done       = False
+    today          = None
+    last_heartbeat = datetime.now(tz=ET)
 
     while True:
         now     = datetime.now(tz=ET)
         t       = now.time()
         weekday = now.weekday()
+
+        # ── Heartbeat every 5 minutes ──────────────────────────────────────────
+        if (now - last_heartbeat).total_seconds() >= 300:
+            if eod_done:
+                phase = "day complete — waiting for next session"
+            elif scan_done and dtime(9, 40) <= t < dtime(15, 50):
+                phase = (
+                    f"market hours — {len(executor.open_positions)} open position(s), "
+                    f"{len(executor.pending_entries)} pending entr(ies)"
+                )
+            elif scan_done:
+                phase = "scan done — outside active sync window"
+            elif watchlist:
+                phase = f"pre-market — watchlist ready ({len(watchlist)} symbols), waiting for 9:35 AM scan"
+            else:
+                phase = "pre-market — building watchlist"
+            logger.info("♥ heartbeat  |  %s", phase)
+            last_heartbeat = now
 
         # ── New calendar day: reset state ──────────────────────────────────────
         if now.date() != today:
@@ -141,8 +162,8 @@ def run() -> None:
             time.sleep(600)
             continue
 
-        # ── 8:00 AM: rebuild overnight watchlist ───────────────────────────────
-        if t.hour == 8 and t.minute < 2 and not scan_done:
+        # ── Pre-market: rebuild watchlist (8:00–9:30 AM, once per day) ───────────
+        if dtime(8, 0) <= t < dtime(9, 30) and not scan_done and not watchlist:
             logger.info("Pre-market: rebuilding watchlist…")
             try:
                 watchlist = build_watchlist()
@@ -163,9 +184,34 @@ def run() -> None:
 
         # ── Market hours: sync every 60 s ─────────────────────────────────────
         if scan_done and not eod_done and dtime(9, 40) <= t < dtime(15, 50):
+            # Pick up any 30-min signals queued from the dashboard
+            if QUEUE_30MIN.exists():
+                try:
+                    from strategies.orb.strategy import ORBSignal, Direction
+                    queued = json.loads(QUEUE_30MIN.read_text())
+                    q_signals = [
+                        ORBSignal(
+                            ticker=s["symbol"],
+                            direction=Direction(s["direction"]),
+                            entry_price=s["entry_price"],
+                            stop_loss=s["stop_loss"],
+                            take_profit=s.get("take_profit", s["entry_price"]),
+                            atr=s["atr"],
+                            relative_volume=s["relvol"],
+                            opening_range_high=s.get("opening_range_high", s["entry_price"]),
+                            opening_range_low=s.get("opening_range_low", s["stop_loss"]),
+                        )
+                        for s in queued.get("signals", [])
+                    ]
+                    executor.submit_entry_orders(q_signals)
+                    QUEUE_30MIN.unlink()
+                    logger.info("30-min queue processed — submitted %d stop-entry order(s)", len(q_signals))
+                except Exception as e:
+                    logger.error("30-min queue processing failed: %s", e)
             try:
                 executor.sync_fills()
                 executor.sync_stop_loss_hits()
+                executor.sync_take_profit_hits()
                 account = _alpaca_account()
                 _write_state(executor, signals, account)
             except Exception as e:
