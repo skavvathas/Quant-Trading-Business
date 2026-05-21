@@ -20,14 +20,13 @@ st.set_page_config(
     page_title="Trading Strategy Hub",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] { background: #0f0f1a; }
 [data-testid="stHeader"]           { background: transparent; }
-[data-testid="stSidebarNav"]       { display: none; }
 
 .card {
     background: #13131f;
@@ -80,6 +79,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Market Overview button ─────────────────────────────────────────────────────
+
+_mo_col, _ = st.columns([1, 3])
+with _mo_col:
+    st.page_link(
+        "pages/Market_Overview.py",
+        label="🌐  Market Overview",
+        use_container_width=True,
+    )
+
+st.markdown("<br>", unsafe_allow_html=True)
+
 
 # ── ORB live status ────────────────────────────────────────────────────────────
 
@@ -105,7 +116,7 @@ orb_class = "card live" if _orb_live else "card"
 st.markdown(
     '<p style="font-size:0.70rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;'
     'color:#6b7280;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid #1f2937;">'
-    'Quantitative Strategies</p>',
+    '<h1 style="font-size:1.2rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#f3f4f6;">Quantitative Strategies on Equities</h1>',
     unsafe_allow_html=True,
 )
 
@@ -130,7 +141,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 st.markdown(
     '<p style="font-size:0.70rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;'
     'color:#6b7280;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid #1f2937;">'
-    'Options Strategies</p>',
+    '<h1 style="font-size:1.2rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#f3f4f6;">Options Strategies</h1>',
     unsafe_allow_html=True,
 )
 

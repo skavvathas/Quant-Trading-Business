@@ -8,14 +8,13 @@ st.set_page_config(
     page_title="Wheel Strategy",
     page_icon="⚙️",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] { background: #0f0f1a; }
 [data-testid="stHeader"]           { background: transparent; }
-[data-testid="stSidebarNav"]       { display: none; }
 
 .section-title {
     font-size: 0.70rem; font-weight: 700; letter-spacing: 0.12em;

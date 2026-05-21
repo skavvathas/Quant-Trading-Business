@@ -29,11 +29,11 @@ ATR_TIERS: list[dict] = [
 ATR_STOP_PCT     = 0.10        # legacy — kept for backtest compatibility only
 
 # ── Position sizing ────────────────────────────────────────────────────────────
-RISK_PER_TRADE   = 0.01        # risk 1% of initial capital per trade if stop is hit
+RISK_PER_TRADE   = 0.015       # risk 1.5% of initial capital per trade if stop is hit
 MAX_LEVERAGE     = 4.0         # FINRA day-trading maximum
 
 # ── Portfolio-level daily risk limits ─────────────────────────────────────────
-MAX_DAILY_LOSS_PCT = 0.05      # stop trading if portfolio is down 5% on the day
+MAX_DAILY_LOSS_PCT = 0.025     # stop trading if portfolio is down 2.5% on the day
 MAX_DAILY_GAIN_PCT = 0.05      # stop trading if portfolio is up 5% on the day
 
 # ── Data fetching ──────────────────────────────────────────────────────────────
