@@ -120,7 +120,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-c1, _spacer = st.columns([1, 2], gap="large")
+c1, c2, _spacer = st.columns([1, 1, 1], gap="large")
 
 with c1:
     st.markdown(f"""
@@ -132,6 +132,20 @@ with c1:
     </div>
     """, unsafe_allow_html=True)
     st.page_link("pages/ORB_Dashboard.py", label="Open dashboard →", use_container_width=True)
+
+with c2:
+    st.markdown("""
+    <div class="card">
+        <div class="card-abbr">ORB QQQ</div>
+        <div class="card-name">ORB on QQQ / TQQQ</div>
+        <div class="card-desc">
+            5-min ORB on QQQ &amp; TQQQ only · 1% risk/trade · 10R target · Baseline + optimised
+            variants · Paper: 33% ann. alpha (QQQ), 48% (TQQQ), beta ≈ 0.
+        </div>
+        <span class="card-status grey">● Backtest / Research</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.page_link("pages/ORB_QQQ_Dashboard.py", label="Open dashboard →", use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
