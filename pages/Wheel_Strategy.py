@@ -1,7 +1,12 @@
 """
-pages/Wheel_Strategy.py — Wheel Strategy overview page.
+pages/Wheel_Strategy.py — Wheel options income strategy dashboard.
 """
 
+from __future__ import annotations
+
+from datetime import timezone
+
+import pandas as pd
 import streamlit as st
 
 st.set_page_config(
@@ -26,21 +31,13 @@ st.markdown("""
     background: #13131f; border: 1px solid #1f2937;
     border-radius: 10px; padding: 20px 22px;
 }
-.step-num {
-    font-size: 1.6rem; font-weight: 800; color: #1f2937;
-    line-height: 1; margin-bottom: 6px;
-}
-.step-title { font-size: 0.95rem; font-weight: 700; color: #f3f4f6; margin-bottom: 6px; }
-.step-desc  { font-size: 0.80rem; color: #9ca3af; line-height: 1.6; }
-.outcome-good { color: #4ade80; font-weight: 600; }
-.outcome-bad  { color: #facc15; font-weight: 600; }
-.tag {
-    display: inline-block; border-radius: 4px; padding: 2px 10px;
-    font-size: 0.72rem; font-weight: 700; margin-right: 6px;
-}
-.tag-csp  { background: #1e3a5f; color: #93c5fd; }
-.tag-cc   { background: #14532d; color: #86efac; }
-.tag-soon { background: #1f2937; color: #6b7280; }
+.metric-val   { font-size: 1.6rem; font-weight: 800; color: #f3f4f6; }
+.metric-label { font-size: 0.70rem; color: #6b7280; text-transform: uppercase;
+                letter-spacing: 0.09em; margin-top: 2px; }
+.badge-csp { background: #1e3a5f; color: #93c5fd;
+             border-radius: 4px; padding: 2px 8px; font-size: 0.72rem; font-weight: 700; }
+.badge-cc  { background: #14532d; color: #86efac;
+             border-radius: 4px; padding: 2px 8px; font-size: 0.72rem; font-weight: 700; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -58,184 +55,241 @@ st.markdown("""
     </span>
     <span style="background:#1f2937;color:#6b7280;border-radius:6px;
                  padding:4px 12px;font-size:0.72rem;font-weight:700;letter-spacing:0.06em;">
-        COMING SOON
+        PAPER / RESEARCH
     </span>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<div style="font-size:0.84rem;color:#9ca3af;line-height:1.7;margin-bottom:8px;">
-    The Wheel is a systematic options income strategy. You repeatedly sell premium on stocks
-    you are willing to own, collecting cash every expiration cycle. It has two legs that
-    alternate depending on whether you are assigned shares.
-</div>
-""", unsafe_allow_html=True)
 
+# ── How it works ───────────────────────────────────────────────────────────────
 
-# ── The Cycle ──────────────────────────────────────────────────────────────────
-
-st.markdown('<p class="section-title">The Wheel Cycle</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-title">Strategy Overview</p>', unsafe_allow_html=True)
 
 c1, arrow1, c2, arrow2, c3 = st.columns([4, 1, 4, 1, 4], gap="small")
 
 with c1:
     st.markdown("""
     <div class="card" style="border-color:#1e3a5f;">
-        <div class="step-num">01</div>
-        <div class="step-title"><span class="tag tag-csp">CSP</span> Cash-Secured Put</div>
-        <div class="step-desc">
-            Sell a put option below the current stock price at your chosen strike.
-            You receive premium immediately. The full cash to buy 100 shares
-            (strike × 100) is reserved as collateral.<br><br>
-            <span class="outcome-good">✓ Expires worthless</span> — keep premium, sell another CSP.<br>
-            <span class="outcome-bad">→ Assigned</span> — you buy 100 shares at the strike. Move to leg 2.
+        <div style="font-size:1.5rem;font-weight:800;color:#1f2937;line-height:1;margin-bottom:6px;">01</div>
+        <div style="font-size:0.95rem;font-weight:700;color:#f3f4f6;margin-bottom:6px;">
+            <span class="badge-csp">CSP</span> Cash-Secured Put
+        </div>
+        <div style="font-size:0.80rem;color:#9ca3af;line-height:1.6;">
+            Sell a ~25-delta put at 35 DTE. Reserve strike × 100 in cash.
+            Close at 50% profit (max theta decay captured).<br><br>
+            <span style="color:#4ade80;font-weight:600;">✓ Expires OTM</span> — keep premium, repeat.<br>
+            <span style="color:#facc15;font-weight:600;">→ Assigned</span> — own shares at cost basis = strike − premium.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 with arrow1:
     st.markdown("""
-    <div style="display:flex;align-items:center;justify-content:center;height:100%;
-                font-size:1.4rem;color:#374151;padding-top:40px;">→</div>
+    <div style="display:flex;align-items:center;justify-content:center;
+                height:100%;font-size:1.4rem;color:#374151;padding-top:40px;">→</div>
     """, unsafe_allow_html=True)
 
 with c2:
     st.markdown("""
     <div class="card" style="border-color:#14532d;">
-        <div class="step-num">02</div>
-        <div class="step-title"><span class="tag tag-cc">CC</span> Covered Call</div>
-        <div class="step-desc">
-            Sell a call option above your cost basis (strike paid − premium received).
-            Your shares act as collateral — no extra cash needed.<br><br>
-            <span class="outcome-good">✓ Expires worthless</span> — keep premium, sell another CC.<br>
-            <span class="outcome-bad">→ Called away</span> — shares sold at the strike. Collect appreciation + premium. Wheel resets.
+        <div style="font-size:1.5rem;font-weight:800;color:#1f2937;line-height:1;margin-bottom:6px;">02</div>
+        <div style="font-size:0.95rem;font-weight:700;color:#f3f4f6;margin-bottom:6px;">
+            <span class="badge-cc">CC</span> Covered Call
+        </div>
+        <div style="font-size:0.80rem;color:#9ca3af;line-height:1.6;">
+            Sell a ~25-delta call above cost basis at 35 DTE. Shares collateralise.
+            Close at 50% profit.<br><br>
+            <span style="color:#4ade80;font-weight:600;">✓ Expires OTM</span> — keep premium, sell another CC.<br>
+            <span style="color:#facc15;font-weight:600;">→ Called away</span> — shares sold at strike + premium kept.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 with arrow2:
     st.markdown("""
-    <div style="display:flex;align-items:center;justify-content:center;height:100%;
-                font-size:1.4rem;color:#374151;padding-top:40px;">↺</div>
+    <div style="display:flex;align-items:center;justify-content:center;
+                height:100%;font-size:1.4rem;color:#374151;padding-top:40px;">↺</div>
     """, unsafe_allow_html=True)
 
 with c3:
     st.markdown("""
     <div class="card">
-        <div class="step-num" style="color:#374151;">↺</div>
-        <div class="step-title" style="color:#6b7280;">Reset</div>
-        <div class="step-desc">
-            After the call is assigned, cash is freed up and the cycle restarts
-            from leg 1 — sell a new cash-secured put on the same or a different stock.<br><br>
-            Each full cycle (CSP → assignment → CC → called away) typically spans
-            <b style="color:#f3f4f6;">60–90 calendar days</b> and two premium collections.
+        <div style="font-size:1.5rem;font-weight:800;color:#374151;line-height:1;margin-bottom:6px;">↺</div>
+        <div style="font-size:0.95rem;font-weight:700;color:#6b7280;margin-bottom:6px;">Reset</div>
+        <div style="font-size:0.80rem;color:#6b7280;line-height:1.6;">
+            After call-away, cash is freed and the cycle restarts.<br>
+            Each full cycle spans roughly <b style="color:#f3f4f6;">60–90 days</b>
+            and captures two rounds of premium.<br><br>
+            Entry filter: <b style="color:#f3f4f6;">IV Rank ≥ 30</b>,
+            annualised yield ≥ <b style="color:#f3f4f6;">20%</b>.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 
-# ── Key Parameters ─────────────────────────────────────────────────────────────
+# ── Live CSP Scanner ────────────────────────────────────────────────────────────
 
-st.markdown('<p class="section-title">Key Parameters</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-title">CSP Scanner</p>', unsafe_allow_html=True)
 
-p1, p2, p3 = st.columns(3, gap="large")
+st.info(
+    "Uses **yfinance** daily data (no API key needed). "
+    "IV approximated as HV30 × 1.15. Options priced with Black-Scholes.",
+    icon="ℹ️",
+)
 
-with p1:
-    st.markdown("""
-    <div class="card">
-        <div style="font-size:0.72rem;color:#6b7280;text-transform:uppercase;
-                    letter-spacing:0.08em;margin-bottom:10px;">Strike Selection</div>
-        <div style="font-size:0.82rem;color:#9ca3af;line-height:1.7;">
-            <b style="color:#f3f4f6;">CSP delta: 0.20–0.30</b><br>
-            Strike roughly 5–10% below spot. High enough to collect meaningful premium,
-            low enough to avoid assignment on normal pullbacks.<br><br>
-            <b style="color:#f3f4f6;">CC strike: above cost basis</b><br>
-            Aim for a strike that, if called away, produces a net profit including
-            both premiums collected.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+col_btn, col_status = st.columns([1, 3])
+with col_btn:
+    run_scan = st.button("▶ Run Scan", use_container_width=True)
+with col_status:
+    st.markdown(
+        '<span style="color:#6b7280;font-size:0.80rem;">'
+        'Ranks all universe stocks by annualised premium yield. IV Rank ≥ 30 filter applied.</span>',
+        unsafe_allow_html=True,
+    )
 
-with p2:
-    st.markdown("""
-    <div class="card">
-        <div style="font-size:0.72rem;color:#6b7280;text-transform:uppercase;
-                    letter-spacing:0.08em;margin-bottom:10px;">Expiration (DTE)</div>
-        <div style="font-size:0.82rem;color:#9ca3af;line-height:1.7;">
-            <b style="color:#f3f4f6;">Target: 30–45 DTE</b><br>
-            This range sits in the steepest part of the theta decay curve — you sell
-            when time value is highest and buy back (or let expire) when it's gone.<br><br>
-            <b style="color:#f3f4f6;">Close at 50% profit</b><br>
-            A common rule: buy back the option when you've captured 50% of max profit,
-            then redeploy into the next cycle.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+if run_scan:
+    with st.spinner("Fetching daily bars and computing signals…"):
+        try:
+            from strategies.wheel.scanner import run_scan as _run_scan
+            result = _run_scan()
+            st.session_state["wheel_scan_result"] = result
+        except Exception as e:
+            st.error(f"Scan failed: {e}")
 
-with p3:
-    st.markdown("""
-    <div class="card">
-        <div style="font-size:0.72rem;color:#6b7280;text-transform:uppercase;
-                    letter-spacing:0.08em;margin-bottom:10px;">Stock Selection</div>
-        <div style="font-size:0.82rem;color:#9ca3af;line-height:1.7;">
-            <b style="color:#f3f4f6;">High IV Rank (&gt; 30)</b><br>
-            Elevated implied volatility means richer premiums. Sell when IV is high
-            relative to its 1-year range (IV Rank or IV Percentile).<br><br>
-            <b style="color:#f3f4f6;">Liquid options, strong underlying</b><br>
-            Tight bid/ask spreads (AAPL, TSLA, NVDA, AMD).
-            Only wheel stocks you'd be comfortable holding long-term.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+result = st.session_state.get("wheel_scan_result")
 
-
-# ── Risk / Reward ──────────────────────────────────────────────────────────────
-
-st.markdown('<p class="section-title">Risk / Reward Profile</p>', unsafe_allow_html=True)
-
-r1, r2 = st.columns(2, gap="large")
-
-with r1:
-    st.markdown("""
-    <div class="card">
-        <div style="font-size:0.72rem;color:#6b7280;text-transform:uppercase;
-                    letter-spacing:0.08em;margin-bottom:12px;">Advantages</div>
-        <ul style="font-size:0.82rem;color:#9ca3af;line-height:2;margin:0;padding-left:18px;">
-            <li>Premium income every cycle regardless of direction</li>
-            <li>Defined entry price — assignment only at your chosen strike</li>
-            <li>Lower effective cost basis than buying shares outright</li>
-            <li>Works in sideways and slightly bearish markets (unlike pure long equity)</li>
-            <li>Simple, mechanical, no directional prediction needed</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-
-with r2:
-    st.markdown("""
-    <div class="card">
-        <div style="font-size:0.72rem;color:#6b7280;text-transform:uppercase;
-                    letter-spacing:0.08em;margin-bottom:12px;">Risks</div>
-        <ul style="font-size:0.82rem;color:#9ca3af;line-height:2;margin:0;padding-left:18px;">
-            <li>Assignment if stock drops sharply — paper loss on shares</li>
-            <li>Capped upside — CC limits gains if stock rallies strongly</li>
-            <li>IV crush after earnings — premium collapses, avoid holding through</li>
-            <li>Capital-intensive — one contract requires strike × $100 in cash</li>
-            <li>Slow recovery if assigned far below cost basis</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+if result is not None:
+    ts_str = result.timestamp.astimezone(timezone.utc).strftime("%H:%M UTC")
+    st.markdown(
+        f'<p class="section-title">CSP Candidates · {len(result.signals)} · as of {ts_str}</p>',
+        unsafe_allow_html=True,
+    )
+    if result.signals:
+        rows = []
+        for sig in result.signals:
+            rows.append({
+                "Symbol":       sig.symbol,
+                "Price":        f"${sig.stock_price:,.2f}",
+                "CSP Strike":   f"${sig.strike:,.2f}",
+                "Premium":      f"${sig.premium:.2f}",
+                "Delta":        f"{sig.delta:.2f}",
+                "IV":           f"{sig.iv:.1%}",
+                "IV Rank":      f"{sig.iv_rank:.0f}",
+                "DTE":          sig.dte,
+                "Ann. Yield":   f"{sig.ann_yield:.1%}",
+            })
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.markdown(
+            '<span style="color:#6b7280;font-size:0.82rem;">No candidates pass IV Rank ≥ 30 and yield ≥ 20% filters.</span>',
+            unsafe_allow_html=True,
+        )
+    st.markdown(
+        f'<span style="font-size:0.75rem;color:#4b5563;">'
+        f'{result.n_symbols} symbols scanned · {len(result.skipped)} below filter threshold</span>',
+        unsafe_allow_html=True,
+    )
 
 
-# ── Footer ─────────────────────────────────────────────────────────────────────
+# ── Parameters reference ────────────────────────────────────────────────────────
+
+with st.expander("Strategy Parameters", expanded=False):
+    try:
+        from strategies.wheel import wheel_config as cfg
+        params = {
+            "CSP target delta":      f"{cfg.CSP_TARGET_DELTA:.2f}",
+            "CC target delta":       f"{cfg.CC_TARGET_DELTA:.2f}",
+            "Target DTE":            cfg.TARGET_DTE,
+            "Close at profit %":     f"{cfg.CLOSE_PROFIT_PCT:.0%}",
+            "Min IV Rank":           cfg.MIN_IV_RANK,
+            "Min annualised yield":  f"{cfg.MIN_ANN_YIELD:.0%}",
+            "IV premium (HV mult)":  cfg.IV_PREMIUM,
+            "Max position % equity": f"{cfg.MAX_POSITION_PCT:.0%}",
+            "Max concurrent positions": cfg.MAX_POSITIONS,
+            "Contracts per position":cfg.CONTRACTS,
+            "Commission / contract": f"${cfg.COMMISSION_PER_CONTRACT:.2f}",
+            "Slippage (bps)":        cfg.SLIPPAGE_BPS,
+            "HV window (days)":      cfg.HIST_VOL_WINDOW,
+            "Data source":           "yfinance (daily OHLCV)",
+        }
+        st.dataframe(
+            pd.DataFrame(params.items(), columns=["Parameter", "Value"]),
+            use_container_width=True, hide_index=True,
+        )
+    except Exception as e:
+        st.error(f"Could not load config: {e}")
+
+
+# ── Backtest results ─────────────────────────────────────────────────────────────
+
+try:
+    from strategies.wheel import wheel_config as _cfg
+    _bt_report = _cfg.backtest_report_path()
+    _bt_trades = _cfg.backtest_trades_path()
+except Exception:
+    _bt_report = None
+    _bt_trades = None
+
+if _bt_report and _bt_report.exists():
+    st.markdown('<p class="section-title">Last Backtest Results</p>', unsafe_allow_html=True)
+    try:
+        bt = pd.read_csv(_bt_report)
+        row = bt.iloc[0].to_dict()
+
+        m1, m2, m3, m4, m5 = st.columns(5, gap="large")
+        metric_pairs = [
+            (f"{row.get('ann_return_pct', 0):.1f}%",  "Ann. Return"),
+            (f"{row.get('sharpe_ratio', 0):.2f}",      "Sharpe Ratio"),
+            (f"{row.get('max_drawdown_pct', 0):.1f}%", "Max Drawdown"),
+            (f"{row.get('win_rate_pct', 0):.0f}%",     "Win Rate"),
+            (f"{int(row.get('total_trades', 0))}",     "Total Trades"),
+        ]
+        for col, (val, label) in zip([m1, m2, m3, m4, m5], metric_pairs):
+            with col:
+                color = "#f87171" if val.startswith("-") else "#4ade80"
+                if label == "Max Drawdown":
+                    color = "#f87171"
+                st.markdown(f"""
+                <div class="card" style="text-align:center;padding:16px 10px;">
+                    <div class="metric-val" style="color:{color};">{val}</div>
+                    <div class="metric-label">{label}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        with st.expander("Full backtest metrics", expanded=False):
+            st.dataframe(
+                bt.T.reset_index().rename(columns={"index": "Metric", 0: "Value"}),
+                use_container_width=True, hide_index=True,
+            )
+    except Exception as e:
+        st.warning(f"Could not load backtest report: {e}")
+
+    if _bt_trades and _bt_trades.exists():
+        with st.expander("Trade log", expanded=False):
+            try:
+                trades_df = pd.read_csv(_bt_trades)
+                st.dataframe(trades_df, use_container_width=True, hide_index=True)
+            except Exception as e:
+                st.warning(f"Could not load trade log: {e}")
+
+
+# ── Footer ──────────────────────────────────────────────────────────────────────
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown("""
 <div style="background:#13131f;border:1px solid #1f2937;border-radius:10px;
             padding:16px 20px;font-size:0.78rem;color:#6b7280;line-height:1.7;">
-    <b style="color:#9ca3af;">Implementation roadmap:</b>
-    wheel_config.py (parameters) · scanner (IV rank screener) ·
-    executor (CSP/CC order submission via Alpaca options API) ·
-    position tracker (assignment detection, cost basis tracking) ·
-    dashboard (cycle progress, premium collected, annualised yield)
+    <b style="color:#9ca3af;">Implementation status:</b>
+    wheel_config.py <span style="color:#4ade80;">✓</span> ·
+    strategy.py — Black-Scholes + delta <span style="color:#4ade80;">✓</span> ·
+    universe.py — yfinance + IV rank <span style="color:#4ade80;">✓</span> ·
+    scanner.py — CSP screener <span style="color:#4ade80;">✓</span> ·
+    executor.py — Alpaca options API <span style="color:#4ade80;">✓</span> ·
+    backtest.py — walk-forward simulation <span style="color:#4ade80;">✓</span>
+    <br><br>
+    <b style="color:#9ca3af;">Run backtest:</b>
+    <code>PYTHONPATH=. python3 strategies/wheel/backtest.py --start 2022-01-01 --end 2024-12-31 --fetch</code>
+    <br>
+    <b style="color:#9ca3af;">Note:</b> Live execution requires an options-approved Alpaca account.
 </div>
 """, unsafe_allow_html=True)

@@ -160,3 +160,32 @@ with opt_c1:
     </div>
     """, unsafe_allow_html=True)
     st.page_link("pages/Wheel_Strategy.py", label="View strategy →", use_container_width=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+
+# ── Quantitative Strategies on Crypto ──────────────────────────────────────────
+
+st.markdown(
+    '<p style="font-size:0.70rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;'
+    'color:#6b7280;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid #1f2937;">'
+    '<h1 style="font-size:1.2rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#f3f4f6;">Quantitative Strategies on Crypto</h1>',
+    unsafe_allow_html=True,
+)
+
+crypto_c1, _crypto_spacer = st.columns([1, 2], gap="large")
+
+with crypto_c1:
+    st.markdown("""
+    <div class="card">
+        <div class="card-abbr">AT</div>
+        <div class="card-name">AdaptiveTrend</div>
+        <div class="card-desc">
+            Systematic trend-following on 150+ crypto perpetuals · 6-hour bars ·
+            70/30 long-short · ATR trailing stop · Monthly rebalance.
+            Paper Sharpe 2.41, MDD −12.7% (2022–2024).
+        </div>
+        <span class="card-status grey">● Research / paper trading</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.page_link("pages/AdaptiveTrend_Dashboard.py", label="Open dashboard →", use_container_width=True)
